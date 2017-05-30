@@ -5,7 +5,7 @@ setup(
     version='0.1.0',
     license='MIT',
     py_modules=["picobuild"],
-    install_requires=['click'],
+    install_requires=['click', 'pypng'],
 
     # To provide executable scripts, use entry points in preference to the
     # "scripts" keyword. Entry points provide cross-platform support and allow
