@@ -33,7 +33,7 @@ def write_p8(output, sections):
         if fragment_name != 'header':
             output.write('__' + fragment_name + '__' + '\n')
         if fragment_name in sections:
-            output.writelines(sections.get[fragment_name])
+            output.writelines(sections[fragment_name])
 
 
 @main.command('update')
