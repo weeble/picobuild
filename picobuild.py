@@ -159,15 +159,27 @@ def build_map_slice(indexes, sprite_table):
         ])
     return lines
 
+def read_gfx_data_from_p8(p8, banks=4):
+    expected_pixel_rows = banks*32
+    parsed_data = [parse_gfx_line(line) for line in p8['gfx'][:expected_pixel_rows]]
+    parsed_pixel_rows = len(parsed_data)
+    # Pico 8 won't save data if it's all 0 bytes, so pad it out to the right
+    # size with 0s.
+    missing_pixel_rows = expected_pixel_rows - parsed_pixel_rows
+    parsed_data = parsed_data + [[0] * 128 for i in range(missing_pixel_rows)]
+    return parsed_data
+
+
 @main.command('render-gfx')
 @click.argument('input', type=click.File('rt', encoding='latin-1'), required=True)
 @click.option('--output', type=click.Path(exists=False), required=True)
-def render_gfx(input, output):
+@click.option('--banks', type=click.IntRange(min=1, max=4), default=4)
+def render_gfx(input, output, banks):
     '''
     Render gfx data as a 128 * 128 RGB image.
     '''
     p8 = read_p8(input)
-    indexed_sprite_data = [parse_gfx_line(line) for line in p8['gfx']]
+    indexed_sprite_data = read_gfx_data_from_p8(p8, banks)
     rgb_sprite_data = [[PICO8_PALETTE[i] for i in line] for line in indexed_sprite_data]
 
     with open(output, 'wb') as f:
@@ -182,7 +194,7 @@ def render_map(input, output):
     Render the entire map as a 1024 * 512 RGB image.
     '''
     p8 = read_p8(input)
-    indexed_sprite_data = [parse_gfx_line(line) for line in p8['gfx']]
+    indexed_sprite_data = read_gfx_data_from_p8(p8, banks)
     rgb_sprite_data = [[PICO8_PALETTE[i] for i in line] for line in indexed_sprite_data]
     shared_sprite_data = indexed_sprite_data[64:128]
 
