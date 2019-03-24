@@ -164,7 +164,7 @@ def build_map_slice(indexes, sprite_table):
 @click.option('--output', type=click.Path(exists=False), required=True)
 def render_gfx(input, output):
     '''
-    Render the entire map as a 1024 * 512 RGB image.
+    Render gfx data as a 128 * 128 RGB image.
     '''
     p8 = read_p8(input)
     indexed_sprite_data = [parse_gfx_line(line) for line in p8['gfx']]
