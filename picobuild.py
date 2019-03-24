@@ -186,21 +186,32 @@ def render_gfx(input, output, banks):
         png.from_array(rgb_sprite_data, 'RGB').save(f)
 
 
+def read_upper_map_data_from_p8(p8):
+    required_rows = 32
+    upper_map_data = [parse_map_line(line) for line in p8['map'][:required_rows]]
+    parsed_rows = len(upper_map_data)
+    missing_rows = required_rows - parsed_rows
+    upper_map_data = upper_map_data + [[0] * 128 for i in range(missing_rows)]
+    return upper_map_data
+
+
 @main.command('render-map')
 @click.argument('input', type=click.File('rt', encoding='latin-1'), required=True)
 @click.option('--output', type=click.Path(exists=False), required=True)
-def render_map(input, output):
+@click.option('--rows', type=click.IntRange(min=1, max=64), default=64)
+def render_map(input, output, rows):
     '''
     Render the entire map as a 1024 * 512 RGB image.
     '''
     p8 = read_p8(input)
-    indexed_sprite_data = read_gfx_data_from_p8(p8, banks)
+    indexed_sprite_data = read_gfx_data_from_p8(p8, banks=4)
     rgb_sprite_data = [[PICO8_PALETTE[i] for i in line] for line in indexed_sprite_data]
     shared_sprite_data = indexed_sprite_data[64:128]
 
-    upper_map_data = [parse_map_line(line) for line in p8['map']]
+    upper_map_data = read_upper_map_data_from_p8(p8)
     lower_map_data = convert_sprite_data_to_map_lines(shared_sprite_data)
     map_data = upper_map_data + lower_map_data
+    map_data = map_data[:rows]
 
     stable = build_sprite_table(rgb_sprite_data)
 
