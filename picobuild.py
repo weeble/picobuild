@@ -79,7 +79,7 @@ def update(target, header, lua, gfx, gff, map, sfx, music, output):
 @click.option('--map', type=click.File('wt'))
 @click.option('--sfx', type=click.File('wt'))
 @click.option('--music', type=click.File('wt'))
-def extract(input, header, lua, gfx, gff, map, sfx, music, all):
+def extract(input, header, lua, gfx, gff, map, sfx, music):
     p8 = read_p8(input)
     if header:
         header.writelines(p8['header'])
