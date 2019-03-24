@@ -159,6 +159,20 @@ def build_map_slice(indexes, sprite_table):
         ])
     return lines
 
+@main.command('render-gfx')
+@click.argument('input', type=click.File('rt', encoding='latin-1'), required=True)
+@click.option('--output', type=click.Path(exists=False), required=True)
+def render_gfx(input, output):
+    '''
+    Render the entire map as a 1024 * 512 RGB image.
+    '''
+    p8 = read_p8(input)
+    indexed_sprite_data = [parse_gfx_line(line) for line in p8['gfx']]
+    rgb_sprite_data = [[PICO8_PALETTE[i] for i in line] for line in indexed_sprite_data]
+
+    with open(output, 'wb') as f:
+        png.from_array(rgb_sprite_data, 'RGB').save(f)
+
 
 @main.command('render-map')
 @click.argument('input', type=click.File('rt', encoding='latin-1'), required=True)
