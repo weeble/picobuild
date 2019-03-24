@@ -7,6 +7,7 @@ import png
 
 DIVIDER_REGEX = re.compile('^__([a-z]+)__$')
 FRAGMENT_NAMES = ['header', 'lua', 'gfx', 'label', 'gff', 'map', 'sfx', 'music']
+BANKS_REGEX = re.compile(r'^[0-3](-[0-3])?(,[0-3](-[0-3])?)*$')
 
 
 @click.group()
@@ -120,6 +121,10 @@ def parse_gfx_line(line):
     return [int(ch, 16) for ch in line.strip()]
 
 
+def format_gfx_line(line):
+    return ''.join(hex(value)[-1] for value in line) + '\n'
+
+
 def parse_map_line(line):
     return bytearray.fromhex(line.strip())
 
@@ -159,6 +164,7 @@ def build_map_slice(indexes, sprite_table):
         ])
     return lines
 
+
 def read_gfx_data_from_p8(p8, banks=4):
     expected_pixel_rows = banks*32
     parsed_data = [parse_gfx_line(line) for line in p8['gfx'][:expected_pixel_rows]]
@@ -168,6 +174,50 @@ def read_gfx_data_from_p8(p8, banks=4):
     missing_pixel_rows = expected_pixel_rows - parsed_pixel_rows
     parsed_data = parsed_data + [[0] * 128 for i in range(missing_pixel_rows)]
     return parsed_data
+
+
+def convert_png_row_to_rgb_tuples(pixels, channels):
+    assert channels in [3, 4]
+    assert len(pixels) % channels == 0
+    return list(zip(pixels[0::channels], pixels[1::channels], pixels[2::channels]))
+
+
+def colour_sq_distance(rgb1, rgb2):
+    return tuple((v2-v1)**2 for (v1,v2) in zip(rgb1, rgb2))
+
+def get_index_for_rgb(rgb):
+    return min(
+        range(16),
+        key=lambda idx:colour_sq_distance(PICO8_PALETTE[idx], rgb))
+
+
+def convert_rgb_tuples_to_indexes(row):
+    return [get_index_for_rgb(rgb) for rgb in row]
+
+
+def validate_rolls(ctx, param, value):
+    try:
+        rolls, dice = map(int, value.split('d', 2))
+        return (dice, rolls)
+    except ValueError:
+        raise click.BadParameter('rolls need to be in format NdM')
+
+
+def parse_multi_banks(ctx, param, banks):
+    if banks.upper() == 'ALL':
+        return (0, 1, 2, 3)
+    banks = banks.replace(' ','')
+    if not BANKS_REGEX.match(banks):
+        raise click.BadParameter('Cannot parse banks expression. Try "0" "0-3" "0,1,3" "all".')
+    parts = banks.split(',')
+    selected = set()
+    for part in parts:
+        if '-' in part:
+            lo, hi = part.split('-')
+            selected.update(range(int(lo), int(hi)+1))
+        else:
+            selected.add(int(part))
+    return tuple(sorted(selected))
 
 
 @main.command('render-gfx')
@@ -184,6 +234,49 @@ def render_gfx(input, output, banks):
 
     with open(output, 'wb') as f:
         png.from_array(rgb_sprite_data, 'RGB').save(f)
+
+
+@main.command('update-gfx')
+@click.argument('target', type=click.File('rt+', encoding='latin-1'), required=True)
+@click.argument('input', type=click.File('rb'), required=True)
+@click.option('--banks', callback=parse_multi_banks, default='all')
+@click.option('--output', type=click.File('wt'))
+def update_gfx(target, input, banks, output):
+    '''
+    Update some or all of the graphics data in a .p8 file.
+    '''
+    print(banks)
+    p8 = read_p8(target)
+    width, height, rgb_data, meta = png.Reader(input).asDirect()
+    if width != 128:
+        click.echo(
+            'Invalid input image: '
+            'expected width 128 pixels, '
+            'got {} pixels'.format(width),
+            err=True)
+        sys.exit(1)
+    required_height = (max(banks) + 1) * 32
+    if not required_height <= height <= 128:
+        click.echo(
+            'Invalid input image: '
+            'expected {} <= height <= 128 pixels, '
+            'got {} pixels'.format(required_height, height),
+            err=True)
+        sys.exit(1)
+    rgb_data = list(rgb_data)
+    rgb_tuple_rows = [convert_png_row_to_rgb_tuples(line, meta['planes']) for line in rgb_data]
+    new_indexed_sprite_data = [convert_rgb_tuples_to_indexes(row) for row in rgb_tuple_rows]
+    assert len(new_indexed_sprite_data) == height
+    indexed_sprite_data = read_gfx_data_from_p8(p8, banks=4)
+    for bank in banks:
+        indexed_sprite_data[bank*32:bank*32+32] = new_indexed_sprite_data[bank*32:bank*32+32]
+    p8['gfx'] = [format_gfx_line(line) for line in indexed_sprite_data]
+    if output:
+        target = output
+    else:
+        target.seek(0)
+        target.truncate()
+    write_p8(target, p8)
 
 
 def read_upper_map_data_from_p8(p8):
